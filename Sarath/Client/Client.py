@@ -1,37 +1,29 @@
 import socket
 
 
-def run_client():
-    # create a socket object
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    server_ip = "127.0.0.1"  # replace with the server's IP address
-    server_port = 8000  # replace with the server's port number
-    # establish connection with server
-    client.connect((server_ip, server_port))
+def start_client(server_host="127.0.0.1", server_port=65432, session_id="default"):
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     try:
         while True:
-            # get input message from user and send it to the server
-            msg = input("Enter message: ")
-            client.send(msg.encode("utf-8")[:160])
-
-            # receive message from the server
-            response = client.recv(160)
-            response = response.decode("utf-8")
-
-            # if server sent us "closed" in the payload, we break out of
-            # the loop and close our socket
-            if response.lower() == "closed":
+            message = input("Enter message to send to server: ")
+            if message.lower() == "exit":
                 break
 
-            print(f"Received: {response}")
-    except Exception as e:
-        print(f"Error: {e}")
+            # Create packet with session ID and message
+            packet = f"{session_id}:{message}"
+
+            # Send packet to the server
+            client_socket.sendto(packet.encode("utf-8"), (server_host, server_port))
+
+            # Receive response from the server
+            response, _ = client_socket.recvfrom(1024)
+            print(f"Received from server: {response.decode('utf-8')}")
+
     finally:
-        # close client socket (connection to the server)
-        client.close()
-        print("Connection to server closed")
+        client_socket.close()
 
 
-run_client()
+if __name__ == "__main__":
+    # Example usage: provide a unique session ID
+    start_client(session_id="12345")

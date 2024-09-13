@@ -1,56 +1,46 @@
 import socket
 import threading
 
-
-def handle_client(client_socket, addr, request):
-    try:
-        while True:
-            # receive and print client messages
-            if request.lower() == "close":
-                client_socket.send("closed".encode("utf-8"))
-                break
-            print(f"Received: {request}")
-            # convert and send accept response to the client
-            response = "accepted"
-            client_socket.send(response.encode("utf-8"))
-    except Exception as e:
-        print(f"Error when hanlding client: {e}")
-    finally:
-        client_socket.close()
-        print(f"Connection to client ({addr[0]}:{addr[1]}) closed")
+# Dictionary to keep track of active sessions
+sessions = {}
+sessions_lock = threading.Lock()
 
 
-def run_server():
-    server_ip = "127.0.0.1"  # server hostname or IP address
-    port = 8000  # server port number
-    # create a socket object
-    try:
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # bind the socket to the host and port
-        server.bind((server_ip, port))
-        # listen for incoming connections
-        server.listen()
-        print(f"Listening on {server_ip}:{port}")
+def handle_client(data, client_address, session_id):
+    # Process the received data
+    print(f"Session {session_id} received from {client_address}: {data}")
+    response = f"Session {session_id} received: {data}"
 
-        while True:
-            # accept a client connection
-            client_socket, addr = server.accept()
-            print(f"Accepted connection from {addr[0]}:{addr[1]}")
-            # start a new thread to handle the client
-            request = client_socket.recv(160).decode("utf-8")
-            thread = threading.Thread(
-                target=handle_client,
-                args=(
-                    client_socket,
-                    addr,
-                    request,
-                ),
-            )
-            thread.start()
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        server.close()
+    # Send a response back to the client
+    return response
 
 
-run_server()
+def start_server(host="127.0.0.1", port=65432):
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_socket.bind((host, port))
+
+    print(f"Server started on {host}:{port}")
+
+    while True:
+        data, client_address = server_socket.recvfrom(1024)
+        data = data.decode("utf-8")
+
+        # Extract session ID from the packet
+        session_id, message = data.split(":", 1)
+
+        # Check if the session already exists
+        with sessions_lock:
+            if session_id in sessions:
+                # If session exists, use the existing session
+                response = handle_client(message, client_address, session_id)
+            else:
+                # If session does not exist, create a new one
+                response = handle_client(message, client_address, session_id)
+                sessions[session_id] = client_address
+
+        # Send the response back to the client
+        server_socket.sendto(response.encode("utf-8"), client_address)
+
+
+if __name__ == "__main__":
+    start_server()
